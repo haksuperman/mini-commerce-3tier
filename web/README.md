@@ -51,7 +51,7 @@ sudo systemctl enable --now nginx
 
 **2) 클론 + 설정**
 ```bash
-git clone <web-repo-url> mini-commerce-web && cd mini-commerce-web
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
 cp deploy/env.example deploy/.env
 # deploy/.env 편집 → WAS_UPSTREAM 을 WAS 사설 IP 로, 예: 10.0.2.10:8000
 # VITE_API_BASE_URL 은 빈 값 유지(상대경로)
@@ -130,7 +130,7 @@ sudo systemctl enable --now nginx
 
 **2) Clone + configure**
 ```bash
-git clone <web-repo-url> mini-commerce-web && cd mini-commerce-web
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
 cp deploy/env.example deploy/.env
 # edit deploy/.env → set WAS_UPSTREAM to the WAS private IP, e.g. 10.0.2.10:8000
 # keep VITE_API_BASE_URL empty (relative paths)

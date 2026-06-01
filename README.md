@@ -52,6 +52,62 @@ mini-commerce-3tier/
 폴더별 상세: `web/README.md` · `was/README.md` · `db/README.md` · `cache/README.md`
 (관리형: `db/managed/README.md` RDS · `cache/managed/README.md` ElastiCache)
 
+### 한 번에 따라하기 — 4서버 배포 예시 (사설 IP 예시)
+
+EC2 4대를 가정. 아래 예시 값만 본인 환경으로 바꾸면 됩니다.
+
+| 호스트 | 역할 | 예시 사설 IP | 비고 |
+|--------|------|--------------|------|
+| db | MySQL 8 | `10.0.3.10` | 인터넷 비공개 |
+| cache | Redis 7 | `10.0.3.20` | 인터넷 비공개 |
+| was | FastAPI | `10.0.2.10` | 인터넷 비공개 |
+| web | nginx | `10.0.1.10` | 공인 IP/도메인 부여 |
+
+예시 DB 비밀번호: `ChangeMe_DB_pw`  ·  예시 JWT 시크릿: `openssl rand -hex 32` 결과값
+
+**① db 호스트 (10.0.3.10)** — Docker 예시
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/db/docker
+MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d
+# (베어메탈은 db/README.md 의 install-mysql.sh 참고)
+```
+
+**② cache 호스트 (10.0.3.20)** — Docker 예시
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/cache/docker
+docker compose up -d
+docker compose exec redis redis-cli ping   # → PONG
+```
+
+**③ was 호스트 (10.0.2.10)**
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/was
+sudo mkdir -p /etc/mini-commerce && sudo cp deploy/env.example /etc/mini-commerce/was.env
+sudo sed -i \
+  -e 's#<password>#ChangeMe_DB_pw#; s#<DB_HOST>#10.0.3.10#; s#<CACHE_HOST>#10.0.3.20#' \
+  -e "s#<production-secret>#$(openssl rand -hex 32)#" \
+  -e 's#<web-tier-domain>#10.0.1.10#' /etc/mini-commerce/was.env
+# 의존성(예: Amazon Linux 2023): python3.12 등 — was/README.md 1) 참고
+sudo RUN_SEED=true bash deploy/deploy.sh
+curl -f http://localhost:8000/healthz/ready    # db·cache 모두 reachable 이면 200
+```
+
+**④ web 호스트 (10.0.1.10)**
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
+cp deploy/env.example deploy/.env
+sed -i 's#^WAS_UPSTREAM=.*#WAS_UPSTREAM=10.0.2.10:8000#' deploy/.env   # VITE_API_BASE_URL 은 빈 값 유지
+# 의존성(nginx·Node20) 설치는 web/README.md 1) 참고
+sudo -E bash deploy/deploy.sh
+```
+
+**⑤ 동작 확인** — 브라우저로 `http://10.0.1.10/` 접속 → 상품 목록 로드(상대경로 `/api/v1/products`,
+CORS 에러 없음) → 데모 계정(`admin@minicommerce.local` / `Admin1234!`)으로 로그인 → 장바구니(Redis) →
+주문(MySQL) 플로우가 web→was→db/cache 로 동작.
+
+> 보안그룹은 위 표대로: web(80/443)←인터넷, was(8000)←web SG, db(3306)←was SG, cache(6379)←was SG.
+> 관리형(RDS/ElastiCache)을 쓰면 ①②를 건너뛰고 엔드포인트를 ③의 `DATABASE_URL`/`REDIS_URL` 에 넣으면 됩니다.
+
 ### 스키마 · 시드 소유권
 - **스키마(테이블)** 는 **was** 가 Alembic(`was/alembic/`)으로 소유. db 티어는 서버·DB·유저·권한만 프로비저닝.
 - **유저 시드**(bcrypt)는 was `deploy/seed.py` 가 담당. **상품 시드**는 was `seed.py` 또는 db `init/02-seed-products.sql`(마이그레이션 후) 양쪽 제공.
@@ -99,6 +155,64 @@ browser ──http──> web (nginx :80) ──/api/ proxy──> was (Gunicorn
 
 Per-folder details: `web/README.md` · `was/README.md` · `db/README.md` · `cache/README.md`
 (managed: `db/managed/README.md` for RDS · `cache/managed/README.md` for ElastiCache).
+
+### End-to-end walkthrough — 4-server example (sample private IPs)
+
+Assuming 4 EC2 hosts. Replace the example values with your own.
+
+| Host | Role | Sample private IP | Note |
+|------|------|-------------------|------|
+| db | MySQL 8 | `10.0.3.10` | not internet-facing |
+| cache | Redis 7 | `10.0.3.20` | not internet-facing |
+| was | FastAPI | `10.0.2.10` | not internet-facing |
+| web | nginx | `10.0.1.10` | public IP/domain |
+
+Sample DB password: `ChangeMe_DB_pw` · Sample JWT secret: output of `openssl rand -hex 32`
+
+**① db host (10.0.3.10)** — Docker example
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/db/docker
+MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d
+# (bare metal: see install-mysql.sh in db/README.md)
+```
+
+**② cache host (10.0.3.20)** — Docker example
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/cache/docker
+docker compose up -d
+docker compose exec redis redis-cli ping   # → PONG
+```
+
+**③ was host (10.0.2.10)**
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/was
+sudo mkdir -p /etc/mini-commerce && sudo cp deploy/env.example /etc/mini-commerce/was.env
+sudo sed -i \
+  -e 's#<password>#ChangeMe_DB_pw#; s#<DB_HOST>#10.0.3.10#; s#<CACHE_HOST>#10.0.3.20#' \
+  -e "s#<production-secret>#$(openssl rand -hex 32)#" \
+  -e 's#<web-tier-domain>#10.0.1.10#' /etc/mini-commerce/was.env
+# deps (e.g. Amazon Linux 2023): python3.12 etc. — see was/README.md step 1
+sudo RUN_SEED=true bash deploy/deploy.sh
+curl -f http://localhost:8000/healthz/ready    # 200 when both db & cache are reachable
+```
+
+**④ web host (10.0.1.10)**
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
+cp deploy/env.example deploy/.env
+sed -i 's#^WAS_UPSTREAM=.*#WAS_UPSTREAM=10.0.2.10:8000#' deploy/.env   # keep VITE_API_BASE_URL empty
+# install deps (nginx, Node 20) — see web/README.md step 1
+sudo -E bash deploy/deploy.sh
+```
+
+**⑤ Smoke test** — open `http://10.0.1.10/` in a browser → product list loads (relative
+`/api/v1/products`, no CORS error) → log in with a demo account
+(`admin@minicommerce.local` / `Admin1234!`) → cart (Redis) → order (MySQL) flows through
+web→was→db/cache.
+
+> Security groups as in the table above: web(80/443)←internet, was(8000)←web SG,
+> db(3306)←was SG, cache(6379)←was SG. With managed RDS/ElastiCache, skip ①② and put
+> their endpoints into step ③'s `DATABASE_URL`/`REDIS_URL`.
 
 ### Schema & seed ownership
 - The **schema (tables)** is owned by **was** via Alembic (`was/alembic/`); the db tier only provisions server/DB/user/grants.

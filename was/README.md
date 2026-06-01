@@ -54,7 +54,13 @@ sudo apt-get update && sudo apt-get install -y \
     default-libmysqlclient-dev rsync
 ```
 
-**2) 환경변수 설정**
+**2) 레포 클론**
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/was
+```
+
+**3) 환경변수 설정**
 ```bash
 sudo mkdir -p /etc/mini-commerce
 sudo cp deploy/env.example /etc/mini-commerce/was.env
@@ -65,16 +71,15 @@ sudo chmod 600 /etc/mini-commerce/was.env
 #   JWT_SECRET_KEY=$(openssl rand -hex 32)
 ```
 
-**3) 배포**
+**4) 배포**
 ```bash
-git clone <was-repo-url> mini-commerce-was && cd mini-commerce-was
-# 최초 배포: 데모 데이터 시드 포함
+# 최초 배포: 데모 데이터 시드 포함(유저+상품). 이후 배포는 RUN_SEED 생략.
 sudo RUN_SEED=true bash deploy/deploy.sh
 ```
 `deploy.sh` 는 소스를 `/opt/mini-commerce-was` 로 동기화하고, venv 생성·앱 설치,
 `alembic upgrade head` 실행, 선택적 시드, systemd 유닛 설치 후 `mini-commerce-was` 를 기동합니다.
 
-**4) 검증**
+**5) 검증**
 ```bash
 systemctl status mini-commerce-was
 curl -f http://localhost:8000/healthz/ready   # DB + Redis 가 reachable 일 때만 200
@@ -82,6 +87,14 @@ curl -s http://localhost:8000/docs            # OpenAPI UI
 ```
 `/healthz/ready` 는 db·cache 티어가 모두 reachable 할 때만 200 을 반환하므로 데이터 티어
 연결성 점검을 겸합니다.
+
+**데모 계정**(`RUN_SEED=true` 로 시드된 경우):
+
+| 역할 | 이메일 | 비밀번호 |
+|------|--------|----------|
+| admin | `admin@minicommerce.local` | `Admin1234!` |
+| user | `alice@minicommerce.local` | `Alice1234!` |
+| user | `bob@minicommerce.local` | `Bob1234!` |
 
 ### 마이그레이션 · 시드 소유권
 앱이 스키마의 source of truth 입니다. 마이그레이션은 `alembic/` 에 있고 `deploy.sh` 에서
@@ -148,7 +161,13 @@ sudo apt-get update && sudo apt-get install -y \
     default-libmysqlclient-dev rsync
 ```
 
-**2) Configure environment**
+**2) Clone the repo**
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/was
+```
+
+**3) Configure environment**
 ```bash
 sudo mkdir -p /etc/mini-commerce
 sudo cp deploy/env.example /etc/mini-commerce/was.env
@@ -159,17 +178,16 @@ sudo chmod 600 /etc/mini-commerce/was.env
 #   JWT_SECRET_KEY=$(openssl rand -hex 32)
 ```
 
-**3) Deploy**
+**4) Deploy**
 ```bash
-git clone <was-repo-url> mini-commerce-was && cd mini-commerce-was
-# first deploy: also seed demo data
+# first deploy: also seed demo data (users + products). Omit RUN_SEED afterwards.
 sudo RUN_SEED=true bash deploy/deploy.sh
 ```
 `deploy.sh` syncs the source to `/opt/mini-commerce-was`, builds a venv, installs
 the app, runs `alembic upgrade head`, optionally seeds, installs the systemd unit
 and starts `mini-commerce-was`.
 
-**4) Verify**
+**5) Verify**
 ```bash
 systemctl status mini-commerce-was
 curl -f http://localhost:8000/healthz/ready   # 200 only if DB + Redis reachable
@@ -177,6 +195,14 @@ curl -s http://localhost:8000/docs            # OpenAPI UI
 ```
 `/healthz/ready` returns 200 only when both the db and cache tiers are reachable,
 so it doubles as a connectivity check for the data tiers.
+
+**Demo accounts** (when seeded with `RUN_SEED=true`):
+
+| Role | Email | Password |
+|------|-------|----------|
+| admin | `admin@minicommerce.local` | `Admin1234!` |
+| user | `alice@minicommerce.local` | `Alice1234!` |
+| user | `bob@minicommerce.local` | `Bob1234!` |
 
 ### Migrations & seed ownership
 The app is the schema source of truth. Migrations live in `alembic/` and run from

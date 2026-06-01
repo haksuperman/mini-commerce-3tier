@@ -34,6 +34,12 @@ db 티어에 남습니다.
 | 비용 | 높음 | 낮음 |
 | 설정 | `managed/README.md` | 아래 참조 |
 
+### 레포 클론 (설치형 공통)
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/cache
+```
+
 ### 설치형 — Docker
 ```bash
 cd docker
@@ -96,6 +102,12 @@ cache only drops in-progress carts; persisted orders live in the db tier.
 | Ops | AWS handles patching/failover | You manage everything |
 | Cost | Higher | Lower |
 | Setup | `managed/README.md` | below |
+
+### Clone (common to self-managed)
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/cache
+```
 
 ### Self-managed — Docker
 ```bash

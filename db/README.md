@@ -35,6 +35,12 @@ db/
 | 비용 | 높음 | 낮음 |
 | 설정 | `managed/README.md` | 아래 참조 |
 
+### 레포 클론 (설치형 공통)
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/db
+```
+
 ### 설치형 — Docker
 ```bash
 cd docker
@@ -99,6 +105,12 @@ db/
 | Ops | AWS handles patching/backups | You manage everything |
 | Cost | Higher | Lower |
 | Setup | `managed/README.md` | below |
+
+### Clone (common to self-managed)
+```bash
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/db
+```
 
 ### Self-managed — Docker
 ```bash
