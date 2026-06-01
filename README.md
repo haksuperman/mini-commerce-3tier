@@ -2,8 +2,8 @@
 
 🇰🇷 [한국어](#한국어) · 🇬🇧 [English](#english)
 
-`~/mini-commerce-app`(FastAPI + React + MySQL + Redis 모노레포)를 AWS **3계층 아키텍처**로
-배포하기 위해 티어별로 분리한 모노레포입니다. 원본은 수정하지 않고 복사 소스로만 사용했습니다.
+**Mini Commerce** — FastAPI + React + MySQL + Redis 로 만든 커머스 데모 앱을, AWS **3계층
+아키텍처**(web / was / data)로 배포하도록 티어별로 구성한 모노레포입니다.
 
 ```
 mini-commerce-3tier/
@@ -18,7 +18,7 @@ mini-commerce-3tier/
 > "3-tier" = Web / App / Data 3계층 구조. Data 계층을 **db(MySQL)** 와 **cache(Redis)** 두
 > 호스트로 물리 분리했기 때문에 폴더는 4개지만 아키텍처는 3계층입니다.
 >
-> ⚠️ "WAS = Tomcat" 아님 — 원본 백엔드는 **Python FastAPI**(Gunicorn + Uvicorn)입니다.
+> ⚠️ "WAS = Tomcat" 아님 — 백엔드는 **Python FastAPI**(Gunicorn + Uvicorn)입니다.
 
 각 폴더는 독립 배포 단위입니다. 상세 절차는 각 폴더의 `README.md`(한글+영문)를 참고하세요.
 
@@ -127,16 +127,12 @@ CORS 에러 없음) → 데모 계정(`admin@minicommerce.local` / `Admin1234!`)
 - **스키마(테이블)** 는 **was** 가 Alembic(`was/alembic/`)으로 소유. db 티어는 서버·DB·유저·권한만 프로비저닝.
 - **유저 시드**(bcrypt)는 was `deploy/seed.py` 가 담당. **상품 시드**는 was `seed.py` 또는 db `init/02-seed-products.sql`(마이그레이션 후) 양쪽 제공.
 
-### 원본
-`~/mini-commerce-app`(frontend / backend / docker-compose.yml / scripts)에서 추출, 원본·git 히스토리 무손상.
-
 ---
 
 ## English
 
-3-tier monorepo that splits `~/mini-commerce-app` (a FastAPI + React + MySQL + Redis
-monorepo) into deployment tiers for an AWS **3-tier architecture**. The original is
-used only as a copy source and is left untouched.
+**Mini Commerce** — a commerce demo app (FastAPI + React + MySQL + Redis), structured as
+a monorepo for deployment on an AWS **3-tier architecture** (web / was / data).
 
 > "3-tier" = Web / App / Data. The Data tier is physically split into **db (MySQL)**
 > and **cache (Redis)** hosts, so there are 4 folders but 3 architectural tiers.
@@ -247,6 +243,3 @@ web→was→db/cache.
 ### Schema & seed ownership
 - The **schema (tables)** is owned by **was** via Alembic (`was/alembic/`); the db tier only provisions server/DB/user/grants.
 - **User seeding** (bcrypt) is done by was `deploy/seed.py`. **Product seeding** is available via was `seed.py` or db `init/02-seed-products.sql` (after migrations).
-
-### Source
-Extracted from `~/mini-commerce-app` (frontend / backend / docker-compose.yml / scripts); the original and its git history are untouched.

@@ -12,7 +12,7 @@ Mini Commerce 멀티 티어 배포의 **web 티어**입니다. nginx 로 React/V
 
 ```
 web/
-├── app/                              # React/Vite 소스 (frontend 복사본)
+├── app/                              # React/Vite SPA 소스
 ├── deploy/
 │   ├── nginx/mini-commerce-web.conf  # 정적 서빙 + /api/ 리버스 프록시
 │   ├── deploy.sh                     # 빌드 → 배포 → conf 치환 → reload
@@ -77,9 +77,6 @@ CORS 에러가 없어야 합니다.
 `app/nginx.conf` 는 **단독** SPA 설정(리버스 프록시 없음)입니다. 멀티 티어 리버스 프록시 구성은
 위처럼 베어메탈에서 `deploy/nginx/mini-commerce-web.conf` 를 사용하세요.
 
-### 원본
-`mini-commerce-app/frontend` 에서 추출했으며 원본은 수정하지 않았습니다.
-
 ---
 
 ## English
@@ -91,7 +88,7 @@ required and the SPA uses **relative** `/api/v1` paths.
 
 ```
 web/
-├── app/                              # React/Vite source (copy of frontend/)
+├── app/                              # React/Vite SPA source
 ├── deploy/
 │   ├── nginx/mini-commerce-web.conf  # static serving + /api/ reverse proxy
 │   ├── deploy.sh                     # build → publish → render conf → reload
@@ -157,6 +154,3 @@ relative `/api/v1/products` path with no CORS errors.
 Note that the bundled `app/nginx.conf` is the **standalone** SPA config (no
 reverse proxy). For the multi-tier reverse-proxy setup use
 `deploy/nginx/mini-commerce-web.conf` on bare metal as above.
-
-### Source
-Extracted from `mini-commerce-app/frontend` without modifying the original.
