@@ -11,8 +11,7 @@ mini-commerce-3tier/
 ├── was/        # 2계층(App)  : FastAPI + Gunicorn/systemd
 ├── db/         # 3계층(Data) : MySQL 8  (베어메탈/Docker/RDS)
 ├── cache/      # 3계층(Data) : Redis 7  (베어메탈/Docker/ElastiCache)
-├── README.md   # (이 문서) 전체 아키텍처 개요
-└── BUILD_LOG.md
+└── README.md   # (이 문서) 전체 아키텍처 개요
 ```
 
 > "3-tier" = Web / App / Data 3계층 구조. Data 계층을 **db(MySQL)** 와 **cache(Redis)** 두
