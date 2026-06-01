@@ -59,30 +59,46 @@ mini-commerce-3tier/
 
 #### web 티어 (nginx + React SPA)
 ```bash
-# 1) 의존성: nginx + Node 20
-sudo dnf install -y nginx gettext && curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - && sudo dnf install -y nodejs   # AL2023
-# (Ubuntu: sudo apt-get install -y nginx gettext && curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - && sudo apt-get install -y nodejs)
+# 1) 의존성: nginx + Node 20 (Amazon Linux 2023)
+sudo dnf install -y nginx gettext
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
 sudo systemctl enable --now nginx
+# (Ubuntu:
+#   sudo apt-get install -y nginx gettext
+#   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+#   sudo apt-get install -y nodejs )
 # 2) 클론 + 설정
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/web
 cp deploy/env.example deploy/.env
 #   deploy/.env → WAS_UPSTREAM=<WAS 사설IP>:8000 (VITE_API_BASE_URL 은 빈 값 유지=상대경로)
 # 3) 빌드 + 배포 (npm ci → 빌드 → /var/www/mini-commerce 복사 → nginx conf 치환 → reload)
 sudo -E bash deploy/deploy.sh
 # 4) 검증
-curl -I http://localhost/ ; curl -s http://localhost/api/v1/products
+curl -I http://localhost/
+curl -s http://localhost/api/v1/products
 ```
 
 #### was 티어 (FastAPI + Gunicorn/systemd)
 ```bash
-# 1) 의존성: Python 3.12 + 빌드도구
-sudo dnf install -y python3.12 python3.12-devel gcc pkg-config mariadb-connector-c-devel rsync   # AL2023
-# (Ubuntu: sudo apt-get install -y python3.12 python3.12-venv python3.12-dev gcc pkg-config default-libmysqlclient-dev rsync)
+# 1) 의존성: Python 3.12 + 빌드도구 (Amazon Linux 2023)
+sudo dnf install -y python3.12 python3.12-devel gcc pkg-config \
+  mariadb-connector-c-devel rsync
+# (Ubuntu:
+#   sudo apt-get install -y python3.12 python3.12-venv python3.12-dev \
+#     gcc pkg-config default-libmysqlclient-dev rsync )
 # 2) 클론
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/was
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/was
 # 3) 환경변수
-sudo mkdir -p /etc/mini-commerce && sudo cp deploy/env.example /etc/mini-commerce/was.env && sudo chmod 600 /etc/mini-commerce/was.env
-#   was.env → DATABASE_URL(=...@<DB_HOST>:3306/minicommerce), REDIS_URL(=redis://<CACHE_HOST>:6379/0), JWT_SECRET_KEY=$(openssl rand -hex 32)
+sudo mkdir -p /etc/mini-commerce
+sudo cp deploy/env.example /etc/mini-commerce/was.env
+sudo chmod 600 /etc/mini-commerce/was.env
+#   was.env 편집:
+#     DATABASE_URL=mysql+asyncmy://minicommerce:<pw>@<DB_HOST>:3306/minicommerce
+#     REDIS_URL=redis://<CACHE_HOST>:6379/0
+#     JWT_SECRET_KEY=$(openssl rand -hex 32)
 # 4) 배포 (venv → install → alembic upgrade head → 시드 → systemd 기동)
 sudo RUN_SEED=true bash deploy/deploy.sh
 # 5) 검증
@@ -92,9 +108,11 @@ curl -f http://localhost:8000/healthz/ready    # db·cache reachable 이면 200
 
 #### db 티어 (MySQL 8)
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/db
-# (A) Docker:
-cd docker && MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d   # 01-init.sql 자동 실행
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/db
+# (A) Docker (01-init.sql 자동 실행):
+cd docker
+MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d
 # (B) 베어메탈:
 sudo MYSQL_APP_PASSWORD='ChangeMe_DB_pw' bash baremetal/install-mysql.sh
 # (C) 관리형(RDS): managed/README.md 참고
@@ -104,11 +122,15 @@ sudo MYSQL_APP_PASSWORD='ChangeMe_DB_pw' bash baremetal/install-mysql.sh
 
 #### cache 티어 (Redis 7)
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/cache
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/cache
 # (A) Docker:
-cd docker && docker compose up -d && docker compose exec redis redis-cli ping   # → PONG
+cd docker
+docker compose up -d
+docker compose exec redis redis-cli ping   # → PONG
 # (B) 베어메탈:
-sudo bash baremetal/install-redis.sh && redis-cli ping
+sudo bash baremetal/install-redis.sh
+redis-cli ping
 # (C) 관리형(ElastiCache): managed/README.md 참고
 ```
 6379 는 was SG 에만 개방. WAS 의 `REDIS_URL=redis://<이 호스트>:6379/0` 으로 참조.
@@ -128,22 +150,26 @@ EC2 4대를 가정. 아래 예시 값만 본인 환경으로 바꾸면 됩니다
 
 **① db 호스트 (10.0.3.10)** — Docker 예시
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/db/docker
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/db/docker
 MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d
 # (베어메탈은 db/README.md 의 install-mysql.sh 참고)
 ```
 
 **② cache 호스트 (10.0.3.20)** — Docker 예시
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/cache/docker
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/cache/docker
 docker compose up -d
 docker compose exec redis redis-cli ping   # → PONG
 ```
 
 **③ was 호스트 (10.0.2.10)**
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/was
-sudo mkdir -p /etc/mini-commerce && sudo cp deploy/env.example /etc/mini-commerce/was.env
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/was
+sudo mkdir -p /etc/mini-commerce
+sudo cp deploy/env.example /etc/mini-commerce/was.env
 sudo sed -i \
   -e 's#<password>#ChangeMe_DB_pw#; s#<DB_HOST>#10.0.3.10#; s#<CACHE_HOST>#10.0.3.20#' \
   -e "s#<production-secret>#$(openssl rand -hex 32)#" \
@@ -155,7 +181,8 @@ curl -f http://localhost:8000/healthz/ready    # db·cache 모두 reachable 이�
 
 **④ web 호스트 (10.0.1.10)**
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/web
 cp deploy/env.example deploy/.env
 sed -i 's#^WAS_UPSTREAM=.*#WAS_UPSTREAM=10.0.2.10:8000#' deploy/.env   # VITE_API_BASE_URL 은 빈 값 유지
 # 의존성(nginx·Node20) 설치는 web/README.md 1) 참고
@@ -224,30 +251,46 @@ Ubuntu 22.04+. (Summary below; each folder's `README.md` has the full KO+EN step
 
 #### web tier (nginx + React SPA)
 ```bash
-# 1) deps: nginx + Node 20
-sudo dnf install -y nginx gettext && curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash - && sudo dnf install -y nodejs   # AL2023
-# (Ubuntu: sudo apt-get install -y nginx gettext && curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash - && sudo apt-get install -y nodejs)
+# 1) deps: nginx + Node 20 (Amazon Linux 2023)
+sudo dnf install -y nginx gettext
+curl -fsSL https://rpm.nodesource.com/setup_20.x | sudo bash -
+sudo dnf install -y nodejs
 sudo systemctl enable --now nginx
+# (Ubuntu:
+#   sudo apt-get install -y nginx gettext
+#   curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
+#   sudo apt-get install -y nodejs )
 # 2) clone + configure
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/web
 cp deploy/env.example deploy/.env
 #   deploy/.env → WAS_UPSTREAM=<WAS private IP>:8000 (keep VITE_API_BASE_URL empty = relative paths)
 # 3) build + deploy (npm ci → build → copy to /var/www/mini-commerce → render nginx conf → reload)
 sudo -E bash deploy/deploy.sh
 # 4) verify
-curl -I http://localhost/ ; curl -s http://localhost/api/v1/products
+curl -I http://localhost/
+curl -s http://localhost/api/v1/products
 ```
 
 #### was tier (FastAPI + Gunicorn/systemd)
 ```bash
-# 1) deps: Python 3.12 + build tools
-sudo dnf install -y python3.12 python3.12-devel gcc pkg-config mariadb-connector-c-devel rsync   # AL2023
-# (Ubuntu: sudo apt-get install -y python3.12 python3.12-venv python3.12-dev gcc pkg-config default-libmysqlclient-dev rsync)
+# 1) deps: Python 3.12 + build tools (Amazon Linux 2023)
+sudo dnf install -y python3.12 python3.12-devel gcc pkg-config \
+  mariadb-connector-c-devel rsync
+# (Ubuntu:
+#   sudo apt-get install -y python3.12 python3.12-venv python3.12-dev \
+#     gcc pkg-config default-libmysqlclient-dev rsync )
 # 2) clone
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/was
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/was
 # 3) environment
-sudo mkdir -p /etc/mini-commerce && sudo cp deploy/env.example /etc/mini-commerce/was.env && sudo chmod 600 /etc/mini-commerce/was.env
-#   was.env → DATABASE_URL(=...@<DB_HOST>:3306/minicommerce), REDIS_URL(=redis://<CACHE_HOST>:6379/0), JWT_SECRET_KEY=$(openssl rand -hex 32)
+sudo mkdir -p /etc/mini-commerce
+sudo cp deploy/env.example /etc/mini-commerce/was.env
+sudo chmod 600 /etc/mini-commerce/was.env
+#   edit was.env:
+#     DATABASE_URL=mysql+asyncmy://minicommerce:<pw>@<DB_HOST>:3306/minicommerce
+#     REDIS_URL=redis://<CACHE_HOST>:6379/0
+#     JWT_SECRET_KEY=$(openssl rand -hex 32)
 # 4) deploy (venv → install → alembic upgrade head → seed → start systemd)
 sudo RUN_SEED=true bash deploy/deploy.sh
 # 5) verify
@@ -257,9 +300,11 @@ Demo accounts: `admin@minicommerce.local`/`Admin1234!`, `alice@…`/`Alice1234!`
 
 #### db tier (MySQL 8)
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/db
-# (A) Docker:
-cd docker && MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d   # 01-init.sql runs automatically
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/db
+# (A) Docker (01-init.sql runs automatically):
+cd docker
+MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d
 # (B) bare metal:
 sudo MYSQL_APP_PASSWORD='ChangeMe_DB_pw' bash baremetal/install-mysql.sh
 # (C) managed (RDS): see managed/README.md
@@ -269,11 +314,15 @@ optional via `mysql ... < init/02-seed-products.sql`. Open 3306 to the was SG on
 
 #### cache tier (Redis 7)
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/cache
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/cache
 # (A) Docker:
-cd docker && docker compose up -d && docker compose exec redis redis-cli ping   # → PONG
+cd docker
+docker compose up -d
+docker compose exec redis redis-cli ping   # → PONG
 # (B) bare metal:
-sudo bash baremetal/install-redis.sh && redis-cli ping
+sudo bash baremetal/install-redis.sh
+redis-cli ping
 # (C) managed (ElastiCache): see managed/README.md
 ```
 Open 6379 to the was SG only. WAS references it via `REDIS_URL=redis://<this-host>:6379/0`.
@@ -293,22 +342,26 @@ Sample DB password: `ChangeMe_DB_pw` · Sample JWT secret: output of `openssl ra
 
 **① db host (10.0.3.10)** — Docker example
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/db/docker
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/db/docker
 MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose up -d
 # (bare metal: see install-mysql.sh in db/README.md)
 ```
 
 **② cache host (10.0.3.20)** — Docker example
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/cache/docker
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/cache/docker
 docker compose up -d
 docker compose exec redis redis-cli ping   # → PONG
 ```
 
 **③ was host (10.0.2.10)**
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/was
-sudo mkdir -p /etc/mini-commerce && sudo cp deploy/env.example /etc/mini-commerce/was.env
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/was
+sudo mkdir -p /etc/mini-commerce
+sudo cp deploy/env.example /etc/mini-commerce/was.env
 sudo sed -i \
   -e 's#<password>#ChangeMe_DB_pw#; s#<DB_HOST>#10.0.3.10#; s#<CACHE_HOST>#10.0.3.20#' \
   -e "s#<production-secret>#$(openssl rand -hex 32)#" \
@@ -320,7 +373,8 @@ curl -f http://localhost:8000/healthz/ready    # 200 when both db & cache are re
 
 **④ web host (10.0.1.10)**
 ```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
+git clone https://github.com/haksuperman/mini-commerce-3tier.git
+cd mini-commerce-3tier/web
 cp deploy/env.example deploy/.env
 sed -i 's#^WAS_UPSTREAM=.*#WAS_UPSTREAM=10.0.2.10:8000#' deploy/.env   # keep VITE_API_BASE_URL empty
 # install deps (nginx, Node 20) — see web/README.md step 1
