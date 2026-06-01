@@ -1,11 +1,5 @@
 # Mini Commerce — WAS Tier (FastAPI + Gunicorn)
 
-🇰🇷 [한국어](#한국어) · 🇬🇧 [English](#english)
-
----
-
-## 한국어
-
 Mini Commerce 멀티 티어 배포의 **애플리케이션 티어(WAS)** 입니다. FastAPI 백엔드를 Gunicorn
 (Uvicorn 워커)으로 systemd 서비스로 구동합니다. DB **스키마**(Alembic)와 **시드** 데이터를 소유하고,
 **db 티어**(MySQL)·**cache 티어**(Redis)로 연결하며, **web 티어**의 nginx 리버스 프록시로만
@@ -82,11 +76,16 @@ sudo RUN_SEED=true bash deploy/deploy.sh
 **5) 검증**
 ```bash
 systemctl status mini-commerce-was
-curl -f http://localhost:8000/healthz/ready   # DB + Redis 가 reachable 일 때만 200
+curl -f http://localhost:8000/healthz/live    # liveness(프로세스 생존) → 200
+curl -f http://localhost:8000/healthz/ready   # readiness: DB + Redis reachable 일 때만 200
+curl -s http://localhost:8000/version         # 버전 / git_commit / build_time
 curl -s http://localhost:8000/docs            # OpenAPI UI
 ```
-`/healthz/ready` 는 db·cache 티어가 모두 reachable 할 때만 200 을 반환하므로 데이터 티어
-연결성 점검을 겸합니다.
+엔드포인트 구분:
+- **`/healthz/live`** — 프로세스가 살아있으면 200(의존성 점검 안 함). k8s liveness probe 용.
+- **`/healthz/ready`** — db·cache 티어가 모두 reachable 할 때만 200, 아니면 `degraded`. 데이터
+  티어 연결성 점검을 겸하며 readiness probe / 로드밸런서 헬스체크에 적합.
+- **`/metrics`** — Prometheus 포맷 메트릭(헬스 엔드포인트는 집계에서 제외).
 
 **데모 계정**(`RUN_SEED=true` 로 시드된 경우):
 
@@ -101,112 +100,50 @@ curl -s http://localhost:8000/docs            # OpenAPI UI
 실행됩니다(`RUN_MIGRATIONS_ON_START=false` 로 부팅 시 워커 경합 방지). 데모 유저는 bcrypt
 해시가 필요하므로 유저 시드는 db 티어 SQL 이 아니라 여기 Python(`deploy/seed.py`)에서 합니다.
 
-### Docker (선택)
-`Dockerfile` 이 동일한 Gunicorn 이미지(`:8000`)를 빌드합니다. db·cache 티어 호스트를 가리키는
-`DATABASE_URL` / `REDIS_URL` 을 주입하세요.
+### Docker 배포
 
----
+`Dockerfile` 이 베어메탈과 동일한 Gunicorn 이미지(`:8000`)를 빌드합니다. db·cache 티어 호스트를
+가리키는 `DATABASE_URL` / `REDIS_URL` 을 주입하면 됩니다.
 
-## English
+> ⚠️ **베어메탈과 달리 Docker 에는 `deploy.sh` 가 없습니다.** 즉 컨테이너 CMD 는 Gunicorn 만
+> 실행하고 **마이그레이션을 자동으로 돌리지 않습니다.** 최초 기동 시 스키마(테이블)를 만들려면
+> 아래처럼 **`RUN_MIGRATIONS_ON_START=true`**(부팅 시 `alembic upgrade head` 실행)와,
+> 데모 데이터가 필요하면 **`SEED_ON_START=true`** 를 함께 켜야 합니다. 이를 생략하면 테이블이
+> 없는 상태로 떠서 모든 API 가 실패합니다.
 
-The **application tier** of the Mini Commerce multi-tier deployment. Runs the
-FastAPI backend under Gunicorn (Uvicorn workers) as a systemd service. It owns the
-database **schema** (Alembic) and **seed** data, connects out to the **db** tier
-(MySQL) and **cache** tier (Redis), and is reached only by the **web** tier's
-nginx reverse proxy.
-
-> ⚠️ This is **Python FastAPI**, not Java/Tomcat. The "WAS" host runs
-> Python 3.12 + Gunicorn, not a servlet container.
-
-```
-was/
-├── app/ alembic/ alembic.ini        # FastAPI app
-├── pyproject.toml poetry.lock tests/
-├── Dockerfile                        # backend Dockerfile (optional)
-├── deploy/
-│   ├── systemd/mini-commerce-was.service
-│   ├── gunicorn.conf.py              # bind 0.0.0.0:8000, UvicornWorker, workers=2
-│   ├── deploy.sh                     # venv → install → migrate → (seed) → systemd
-│   ├── seed.py                       # idempotent demo seed (users + products)
-│   └── env.example                   # production env (DATABASE_URL, REDIS_URL, ...)
-├── README.md
-└── .gitignore
-```
-
-### Architecture
-```
-web nginx ──/api/ proxy──> was (Gunicorn :8000) ──> db (MySQL :3306)
-                                                └──> cache (Redis :6379)
-```
-Security group: was `8000` ← web SG only · db `3306` ← was SG · cache `6379` ← was SG.
-
-### EC2 / bare-metal deploy
-
-Tested target: Amazon Linux 2023 / Ubuntu 22.04+.
-
-**1) Install Python 3.12 + build deps**
-
-Amazon Linux 2023:
-```bash
-sudo dnf install -y python3.12 python3.12-devel gcc pkg-config \
-    mariadb-connector-c-devel rsync
-```
-Ubuntu 22.04+ (deadsnakes for 3.12 if needed):
-```bash
-sudo apt-get update && sudo apt-get install -y \
-    python3.12 python3.12-venv python3.12-dev gcc pkg-config \
-    default-libmysqlclient-dev rsync
-```
-
-**2) Clone the repo**
+**1) 이미지 빌드**
 ```bash
 git clone https://github.com/haksuperman/mini-commerce-3tier.git
 cd mini-commerce-3tier/was
+docker build -t mini-commerce-was .
 ```
 
-**3) Configure environment**
+**2) 환경변수 파일 준비** (베어메탈과 동일한 `env.example` 사용)
 ```bash
-sudo mkdir -p /etc/mini-commerce
-sudo cp deploy/env.example /etc/mini-commerce/was.env
-sudo chmod 600 /etc/mini-commerce/was.env
-# edit /etc/mini-commerce/was.env:
+cp deploy/env.example was.env
+# was.env 편집: DATABASE_URL / REDIS_URL 을 db·cache 호스트로, JWT_SECRET_KEY 설정
 #   DATABASE_URL=mysql+asyncmy://minicommerce:<pw>@<DB_HOST>:3306/minicommerce
 #   REDIS_URL=redis://<CACHE_HOST>:6379/0
-#   JWT_SECRET_KEY=$(openssl rand -hex 32)
 ```
 
-**4) Deploy**
+**3) 최초 기동** — 부팅 시 마이그레이션 + 시드를 켜서 실행
 ```bash
-# first deploy: also seed demo data (users + products). Omit RUN_SEED afterwards.
-sudo RUN_SEED=true bash deploy/deploy.sh
+docker run -d --name mini-commerce-was -p 8000:8000 \
+    --env-file was.env \
+    -e RUN_MIGRATIONS_ON_START=true \
+    -e SEED_ON_START=true \
+    mini-commerce-was
 ```
-`deploy.sh` syncs the source to `/opt/mini-commerce-was`, builds a venv, installs
-the app, runs `alembic upgrade head`, optionally seeds, installs the systemd unit
-and starts `mini-commerce-was`.
+이미지는 Gunicorn 워커 2개로 뜨고 각 워커가 부팅 시 마이그레이션을 시도하지만, 두 번째 워커가
+만나는 "already exists" 오류는 무시되도록 처리되어 있어(`app/main.py`) 안전합니다.
 
-**5) Verify**
+**4) 이후 재배포** — 스키마가 이미 있으므로 두 플래그를 끄고(=`env.example` 기본값 `false`) 실행
 ```bash
-systemctl status mini-commerce-was
-curl -f http://localhost:8000/healthz/ready   # 200 only if DB + Redis reachable
-curl -s http://localhost:8000/docs            # OpenAPI UI
+docker run -d --name mini-commerce-was -p 8000:8000 --env-file was.env mini-commerce-was
 ```
-`/healthz/ready` returns 200 only when both the db and cache tiers are reachable,
-so it doubles as a connectivity check for the data tiers.
 
-**Demo accounts** (when seeded with `RUN_SEED=true`):
-
-| Role | Email | Password |
-|------|-------|----------|
-| admin | `admin@minicommerce.local` | `Admin1234!` |
-| user | `alice@minicommerce.local` | `Alice1234!` |
-| user | `bob@minicommerce.local` | `Bob1234!` |
-
-### Migrations & seed ownership
-The app is the schema source of truth. Migrations live in `alembic/` and run from
-`deploy.sh` (`RUN_MIGRATIONS_ON_START=false` so workers don't race on boot).
-Demo users are bcrypt-hashed, so user seeding is done here in Python
-(`deploy/seed.py`), not in the db tier's SQL.
-
-### Docker (optional)
-The `Dockerfile` builds the same Gunicorn image (`:8000`). Provide
-`DATABASE_URL` / `REDIS_URL` pointing at the db and cache tier hosts.
+**5) 검증** — 이미지에 `HEALTHCHECK`(`/healthz/ready`)가 내장되어 있습니다
+```bash
+docker ps                                      # STATUS 가 healthy 인지 확인
+curl -f http://localhost:8000/healthz/ready    # db·cache reachable 이면 200
+```

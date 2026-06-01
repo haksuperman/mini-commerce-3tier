@@ -1,11 +1,5 @@
 # Mini Commerce — Cache Tier (Redis 7)
 
-🇰🇷 [한국어](#한국어) · 🇬🇧 [English](#english)
-
----
-
-## 한국어
-
 Mini Commerce 멀티 티어 배포의 **캐시/세션 티어**입니다. **WAS 티어**에 Redis 7 을 제공합니다
 (장바구니 저장, 7일 TTL). **db**(MySQL) 티어와는 별도 호스트로 분리되어 있습니다. **관리형**(Amazon
 ElastiCache)과 **설치형**(베어메탈/EC2 또는 Docker) 배포를 모두 지원합니다.
@@ -65,71 +59,4 @@ WAS 티어는 **별도 호스트**에서 접속하므로 Redis 가 사설망에�
 ### WAS 티어 연결
 ```
 REDIS_URL=redis://<이 호스트>:6379/0
-```
-
----
-
-## English
-
-The **cache/session tier** of the Mini Commerce multi-tier deployment. Provides
-Redis 7 for the **WAS** tier (shopping-cart storage with a 7-day TTL). Separated
-onto its own host from the **db** (MySQL) tier. Supports both **managed** (Amazon
-ElastiCache) and **self-managed** (bare-metal/EC2 or Docker) deployments.
-
-```
-cache/
-├── baremetal/
-│   ├── install-redis.sh        # install Redis 7 + apply config + start
-│   └── redis.conf              # appendonly yes, maxmemory 128mb, allkeys-lru
-├── docker/
-│   └── docker-compose.yml      # standalone Redis 7
-├── managed/README.md           # Amazon ElastiCache Redis 7 guide
-├── README.md
-└── .gitignore
-```
-
-### Role
-WAS references this tier only via `REDIS_URL=redis://<CACHE_HOST>:6379/0`. It
-stores shopping carts (`redis_cart_ttl_seconds`, default 7 days). Losing the
-cache only drops in-progress carts; persisted orders live in the db tier.
-
-### Choosing a deployment
-| | Managed (ElastiCache) | Self-managed (Docker / bare metal) |
-|--|------------------------|-------------------------------------|
-| Ops | AWS handles patching/failover | You manage everything |
-| Cost | Higher | Lower |
-| Setup | `managed/README.md` | below |
-
-### Clone (common to self-managed)
-```bash
-git clone https://github.com/haksuperman/mini-commerce-3tier.git
-cd mini-commerce-3tier/cache
-```
-
-### Self-managed — Docker
-```bash
-cd docker
-docker compose up -d
-docker compose exec redis redis-cli ping   # → PONG
-```
-Runs `redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy
-allkeys-lru` and exposes 6379 for the WAS tier.
-
-### Self-managed — bare metal / EC2
-```bash
-sudo bash baremetal/install-redis.sh
-redis-cli ping   # → PONG
-```
-Installs Redis 7 and drops in `redis.conf` (AOF on, 128 MB cap, LRU eviction).
-
-#### Network hardening
-The WAS tier connects from a **separate host**, so Redis must be reachable on the
-private network. `redis.conf` defaults to `bind 0.0.0.0` + `protected-mode no`,
-which is only safe behind a strict security group. Restrict **6379 to the WAS
-tier only** (security group / firewall) and never expose it to the internet.
-Optionally set `requirepass` and use `redis://:<pw>@<host>:6379/0`.
-
-### Wire up the WAS tier
-```
-REDIS_URL=redis://<this-host>:6379/0
 ```
