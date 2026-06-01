@@ -1,0 +1,31 @@
+# ============================================================
+# Mini Commerce — Cache Tier (Redis 7) standalone
+# Extracted from the original monorepo docker-compose.yml `redis` service.
+# Runs Redis 7 alone on its own host/container, reachable by the WAS tier
+# over the private network on 6379.
+# ============================================================
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: mini-commerce-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 128mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  redis_data:
+    driver: local

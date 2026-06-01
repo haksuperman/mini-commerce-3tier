@@ -1,0 +1,5 @@
+# Repo-root ignores (each tier also has its own .gitignore)
+.DS_Store
+**/.DS_Store
+*.env
+.env

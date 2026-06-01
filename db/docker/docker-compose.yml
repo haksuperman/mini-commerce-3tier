@@ -1,0 +1,44 @@
+# ============================================================
+# Mini Commerce — Data Tier (MySQL 8) standalone
+# Extracted from the original monorepo docker-compose.yml `mysql` service.
+# Runs MySQL 8 alone on its own host/container, reachable by the WAS tier
+# over the private network on 3306.
+# ============================================================
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: mini-commerce-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-localdev-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-minicommerce}
+      MYSQL_USER: ${MYSQL_USER:-minicommerce}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-localdev}
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Only 01-init.sql auto-runs on first boot (creates DB + user + grants).
+      # 02-seed-products.sql is NOT auto-mounted: the `products` table is
+      # created by the WAS tier's Alembic migrations, so product seeding must
+      # run AFTER `alembic upgrade head` (see init/02-seed-products.sql header).
+      - ../init/01-init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+      - --default-authentication-plugin=mysql_native_password
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "${MYSQL_USER:-minicommerce}", "-p${MYSQL_PASSWORD:-localdev}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+    driver: local

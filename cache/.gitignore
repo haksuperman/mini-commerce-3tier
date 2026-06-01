@@ -1,0 +1,8 @@
+*.env
+.env
+data/
+redis_data/
+*.rdb
+*.aof
+*.log
+.DS_Store

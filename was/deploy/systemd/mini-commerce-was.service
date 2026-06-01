@@ -1,0 +1,36 @@
+[Unit]
+Description=Mini Commerce WAS (FastAPI + Gunicorn/Uvicorn)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=appuser
+Group=appuser
+WorkingDirectory=/opt/mini-commerce-was
+EnvironmentFile=/etc/mini-commerce/was.env
+
+# Gunicorn from the project virtualenv. Args mirror backend/Dockerfile CMD.
+ExecStart=/opt/mini-commerce-was/.venv/bin/gunicorn app.main:app \
+    --worker-class uvicorn.workers.UvicornWorker \
+    --bind 0.0.0.0:8000 \
+    --workers 2 \
+    --timeout 60 \
+    --graceful-timeout 30 \
+    --keep-alive 5 \
+    --access-logfile - \
+    --error-logfile -
+
+Restart=always
+RestartSec=5
+KillMode=mixed
+TimeoutStopSec=30
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
