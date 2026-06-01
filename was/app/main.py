@@ -38,9 +38,11 @@ async def lifespan(app: FastAPI):  # type: ignore[type-arg]
     # Warn about placeholder secrets
     settings.warn_if_placeholder_secrets()
 
-    # Run Alembic migrations if configured
-    # Uses a database-level advisory lock to prevent concurrent migration runs
-    # (important with multiple Gunicorn workers).
+    # Run Alembic migrations if configured.
+    # With multiple Gunicorn workers each worker runs this on startup, so the
+    # runs can race. There is no advisory lock: instead the first worker applies
+    # the migrations and any later worker's "already exists" failure is caught
+    # and ignored below.
     if settings.run_migrations_on_start:
         logger.info("running_migrations")
         import subprocess

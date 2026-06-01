@@ -50,7 +50,9 @@ echo "[install] Enabling + starting ${SERVICE}"
 systemctl enable "${SERVICE}"
 systemctl restart "${SERVICE}"
 
-echo "[install] Applying init/01-init.sql"
+echo "[install] Creating database + app user (DB + user + grants)"
+# Mirrors init/01-init.sql but injects MYSQL_APP_PASSWORD instead of the
+# hardcoded 'localdev' default, so the bare-metal password is a real secret.
 # On a fresh install root may use auth_socket (Ubuntu) or a temp password
 # (MySQL community). Adjust the connection below for your environment.
 mysql --protocol=socket <<SQL || mysql -u root <<SQL
