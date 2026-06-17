@@ -37,14 +37,20 @@ mini-commerce-3tier/
 | was | db(MySQL) | `was` 환경변수 `DATABASE_URL` | `...@<DB_HOST>:3306/minicommerce` |
 | was | cache(Redis) | `was` 환경변수 `REDIS_URL` | `redis://<CACHE_HOST>:6379/0` |
 
-**보안그룹**: web `80/443` ← 인터넷 · was `8000` ← web SG 만 · db `3306` ← was SG 만 · cache `6379` ← was SG 만.
+**포트 정책**: web `80/443` ← 인터넷 · was `8000` ← web 만 · db `3306` ← was 만 · cache `6379` ← was 만.
 
-> **호스트 방화벽도 별도로 열어야 합니다.** 클라우드 보안그룹/Security List 와 **별개로** 각 호스트의 OS
-> 방화벽도 상류 티어로부터의 인바운드 포트를 허용해야 합니다. 특히 **Ubuntu** 인스턴스는 기본 iptables 끝에
-> `REJECT all ... icmp-host-prohibited` 규칙이 있어, 보안그룹만 열면 8000/3306/6379 가 그대로 막힙니다
-> (`sudo iptables -L INPUT -n --line-numbers` 로 확인). RHEL 계열(AL2023)은 firewalld. 상세 명령은 각 티어 README.
+> **포트는 두 계층에서 열어야 합니다.**
+> 1. **AWS 환경이라면** Security Group(필요 시 NACL)에서 위 포트를 허용.
+> 2. **호스트 OS 방화벽** — web·was·db·cache **네 호스트 모두** 자기 인바운드 포트를 엽니다. 특히 **Ubuntu**
+>    는 기본 iptables 끝에 `REJECT all ... icmp-host-prohibited` 가 있어, 이 단계를 빠뜨리면 80/8000/3306/6379
+>    가 막힙니다(`sudo iptables -L INPUT -n --line-numbers` 로 확인 · Amazon Linux 2023 은 firewalld).
+>    상세 명령은 각 티어 README.
 
 ### 배포 순서 (필수)
+```
+① db(MySQL) ──→ ② cache(Redis) ──→ ③ was(FastAPI) ──→ ④ web(nginx)
+   3306 개방        6379 개방            8000 개방            80/443 개방
+```
 1. **db / cache** 먼저 기동 + 포트 오픈 (데이터 계층).
 2. **was**: venv 구성 → `alembic upgrade head`(스키마 생성) → 최초 1회 시드(`RUN_SEED=true`) → systemd 기동.
 3. **web**: `VITE_API_BASE_URL=""` 로 빌드 → `/var/www/mini-commerce` 배포 → nginx `__WAS_UPSTREAM__` 치환 후 reload.
@@ -87,7 +93,7 @@ MYSQL_ROOT_PASSWORD=ChangeMe_root MYSQL_PASSWORD=ChangeMe_DB_pw docker compose u
 # (베어메탈은 db/README.md 의 install-mysql.sh 참고)
 ```
 ✅ 다음 단계 전 체크: `sudo ss -ltnp | grep 3306` 가 `0.0.0.0:3306`, 그리고 **3306 을 was 호스트에 개방**
-(호스트 방화벽 — db/README.md 3) 단계).
+(db/README.md 의 '호스트 방화벽' 단계).
 
 **② cache 호스트 (10.0.3.20)** — Docker 예시
 ```bash
@@ -97,7 +103,7 @@ docker compose up -d
 docker compose exec redis redis-cli ping   # → PONG
 ```
 ✅ 다음 단계 전 체크: `sudo ss -ltnp | grep 6379` 가 `0.0.0.0:6379`, 그리고 **6379 를 was 호스트에 개방**
-(cache/README.md 4) 단계). → db·cache 가 reachable 하지 않으면 다음 was 가 부팅 실패합니다.
+(cache/README.md 의 '호스트 방화벽' 단계). → db·cache 가 reachable 하지 않으면 다음 was 가 부팅 실패합니다.
 
 **③ was 호스트 (10.0.2.10)**
 ```bash
@@ -105,6 +111,7 @@ git clone https://github.com/haksuperman/mini-commerce-3tier.git
 cd mini-commerce-3tier/was
 sudo mkdir -p /etc/mini-commerce
 sudo cp deploy/env.example /etc/mini-commerce/was.env
+# 아래 <password>/<DB_HOST>/<CACHE_HOST>/<production-secret>/<web-tier-domain> 는 env.example 의 자리표시자
 sudo sed -i \
   -e 's#<password>#ChangeMe_DB_pw#; s#<DB_HOST>#10.0.3.10#; s#<CACHE_HOST>#10.0.3.20#' \
   -e "s#<production-secret>#$(openssl rand -hex 32)#" \
@@ -116,7 +123,7 @@ sudo RUN_SEED=true bash deploy/deploy.sh
 curl -s http://localhost:8000/healthz/ready    # → {"status":"ready","checks":{"db":"ok","redis":"ok"}}
 ```
 ✅ 다음 단계 전 체크: `sudo ss -ltnp | grep ':8000'` 가 `0.0.0.0:8000`, 그리고 **8000 을 web 호스트에 개방**
-(was/README.md 6) 단계).
+(was/README.md 의 '호스트 방화벽' 단계).
 
 **④ web 호스트 (10.0.1.10)**
 ```bash
@@ -140,8 +147,8 @@ curl -s http://localhost/api/v1/products       # → 상품 20개 JSON
 데모 계정(`admin@minicommerce.local` / `Admin1234!`)으로 로그인 → 장바구니(Redis) → 주문(MySQL) 플로우가
 web→was→db/cache 로 동작.
 
-> 보안그룹은 위 표대로: web(80/443)←인터넷, was(8000)←web SG, db(3306)←was SG, cache(6379)←was SG.
-> **+ 각 호스트 OS 방화벽도 같은 포트를 열어야 합니다**(특히 Ubuntu iptables 기본 REJECT 주의 — 각 티어 README).
+> 포트는 두 계층에서: **AWS 환경이라면** Security Group/NACL(web 80/443←인터넷, was 8000←web, db 3306←was,
+> cache 6379←was), **그리고 네 호스트 모두 OS 방화벽**(특히 Ubuntu iptables 기본 REJECT 주의 — 각 티어 README).
 > 관리형(RDS/ElastiCache)을 쓰면 ①②를 건너뛰고 엔드포인트를 ③의 `DATABASE_URL`/`REDIS_URL` 에 넣으면 됩니다.
 >
 > ③ was 를 베어메탈 대신 **Docker** 로 띄우려면 `was/README.md` 의 "Docker 배포" 를 따르세요.
