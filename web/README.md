@@ -24,9 +24,11 @@ web/
 
 ### EC2 / 베어메탈 배포
 
-대상: Amazon Linux 2023 / Ubuntu 22.04+
+대상: Amazon Linux 2023 / Ubuntu 22.04+. 아래 명령은 모두 **web 호스트**에서 실행합니다.
 
-**1) nginx + Node 20 설치**
+> WAS가 정상 기동(`curl http://<WAS_IP>:8000/api/v1/products` 성공)된 뒤에 web 을 배포하세요.
+
+**1) nginx + Node 20 설치** — nginx 는 서빙/프록시, Node 20·gettext(envsubst)는 SPA 빌드·설정 렌더링에 필요
 
 Amazon Linux 2023:
 ```bash
@@ -43,26 +45,47 @@ sudo apt-get install -y nodejs
 sudo systemctl enable --now nginx
 ```
 
-**2) 클론 + 설정**
+**2) 클론 + 설정** — `WAS_UPSTREAM` 에 **WAS 호스트의 사설 IP**(web 자신이 아님)를 넣는 게 핵심
 ```bash
 git clone https://github.com/haksuperman/mini-commerce-3tier.git && cd mini-commerce-3tier/web
 cp deploy/env.example deploy/.env
-# deploy/.env 편집 → WAS_UPSTREAM 을 WAS 사설 IP 로, 예: 10.0.2.10:8000
-# VITE_API_BASE_URL 은 빈 값 유지(상대경로)
+sudo nano deploy/.env
+#   WAS_UPSTREAM=<WAS_IP>:8000      ← 예: 10.0.2.10:8000 (반드시 WAS 호스트 사설 IP)
+#   VITE_API_BASE_URL=             ← 빈 값 유지(상대경로 /api/v1 사용)
 ```
+> ⚠️ `hostname -I` 로 **이 web 호스트의 IP** 를 확인하세요. `WAS_UPSTREAM` 에 실수로 web 자신의 IP 를 넣으면
+> nginx 가 자기 자신 8000(없음)으로 프록시해 504 가 납니다.
 
 **3) 빌드 + 배포**
 ```bash
 sudo -E bash deploy/deploy.sh
 ```
-`npm ci` → `VITE_API_BASE_URL=""` 로 빌드 → `app/dist/` 를 `/var/www/mini-commerce` 로 복사 →
-nginx 서버 블록 렌더링(`__WAS_UPSTREAM__` 치환) → `nginx -t` 후 reload.
+`deploy.sh` 는 ① `npm ci` → ② `VITE_API_BASE_URL=""` 로 빌드 → ③ `app/dist/` 를 `/var/www/mini-commerce` 로
+복사 → ④ nginx 서버 블록 렌더링(`__WAS_UPSTREAM__` 치환) → ⑤ `nginx -t` 후 reload, 순서로 진행합니다.
+→ 예상 출력: 마지막에 `[deploy] Done. Web tier serving ...`.
+> **정상이지만 놀라는 출력 2가지** — 둘 다 배포 실패가 아닙니다.
+> - `npm` 빌드 중 `N vulnerabilities (... critical)` : npm 의존성 트리의 알려진 취약점 **알림**일 뿐 빌드는 성공.
+>   대부분 빌드/테스트용 devDependency 라 운영(정적 파일) 노출과 무관. 점검은 `npm audit --omit=dev`.
+> - nginx `conflicting server name "_" ... ignored` : 배포판 기본 서버 블록
+>   (`/etc/nginx/sites-enabled/default`, 같은 `:80`·`server_name _`)과 겹쳐 나는 경고. 거슬리면 Ubuntu 에서
+>   `sudo rm /etc/nginx/sites-enabled/default && sudo systemctl reload nginx` 로 제거하면 사라집니다.
 
-**4) 검증**
+**4) 호스트 방화벽** — web 은 인터넷에 80(필요 시 443)을 열어야 합니다. Ubuntu 는 기본 iptables `REJECT`
+때문에 막힐 수 있으니 확인하세요.
 ```bash
-curl -I http://localhost/                 # SPA index → 200
-curl -s http://localhost/api/v1/products  # WAS 로 프록시 → 상품 JSON
+sudo iptables -L INPUT -n --line-numbers                      # 80 이 허용돼 있는지 / 끝 REJECT 줄(<N>) 확인
+sudo iptables -I INPUT <N> -p tcp --dport 80 -j ACCEPT        # 필요 시 80 허용 (ufw: sudo ufw allow 80/tcp)
+sudo netfilter-persistent save
 ```
+
+**5) 검증** — nginx 는 **`/api/` 경로만** WAS로 프록시합니다(`/healthz` 등은 프록시 안 됨)
+```bash
+curl -I http://localhost/                  # SPA index → 200
+curl -s http://localhost/api/v1/products   # web nginx → WAS 프록시 → 상품 20개 JSON
+```
+→ `http://<WAS_IP>:8000/...` 는 WAS 를 **직접** 보는 것이고(포트 8000), web 을 통한 확인은
+**`/api/v1/products`**(포트 80, `/api/` 경로) 로 합니다. `http://<web>/healthz/...` 처럼 프록시되지 않는
+경로/포트로 테스트하면 404·timeout 이 나니 주의하세요.
 브라우저로 `http://<web-공인IP>/` 접속 → 상품 목록이 `/api/v1/products` 상대경로로 로드되고
 CORS 에러가 없어야 합니다.
 
